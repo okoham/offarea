@@ -24,11 +24,13 @@ face;
 
 
 // function declarations
+double face_area(face *f, point points[]);
 double triangle_area(point v0, point v1, point v2);
 void parse_line2_tok(char *line, int *nv, int *nf);
 void parse_coords(char *line, point *p);
 void parse_face(char *line, face *f);
-
+void print_coords(point *coords, int n);
+void print_faces(face *faces, int n);
 
 
 int main(int argc, char *argv[])
@@ -76,87 +78,91 @@ int main(int argc, char *argv[])
 
     // allocate memory for vertex coordinates
     point *vertices = calloc(nv, sizeof(point));
-
     // read vertices
     for (int i = 0; i < nv; i++)
     {
         nread = getline(&line, &len, infile);
-        point *p = &vertices[i];
-        parse_coords(line, p);
-        printf("%f %f %f\n", p->x, p->y, p->z);        
+        parse_coords(line, &vertices[i]);     
     }
+    // debug: print them
+    // print_coords(vertices, nv);
     
-    // faces
-    /*
-    vertex *faces[nf];
-    for (int i = 0; i < nf; i++)
-    {
-        nread = getline(&line, &len, infile);
-        faces[i] = parse_face_list(line);
-
-        // debug
-        vertex *tmp = faces[i];
-        while (tmp != NULL)
-        {
-            printf("%i ", tmp->id);
-            tmp = tmp->next;
-        }
-        printf("\n");
-    }
-    // free memory
-    for (int i = 0; i < nf; i++)
-    {
-        free_list(faces[i]);
-    }    
-    */
-
     // faces, other way
     face faces[nf];
-    face *f = &faces[0];
-    for (int i = 0; i < nf; i++, f++)
+    for (int i = 0; i < nf; i++)
     {
         nread = getline(&line, &len, infile);
-        parse_face(line, f);
-
-        // debug
-        printf("%i (%i): ", i, f->nv);
-        int *nid = f->vertices;
-        for (int j = 0; j < f->nv; j++, nid += sizeof(int))
-        {
-            // int idx = *(f->vertices + j*(sizeof(int)));
-            // printf("%i ", idx);
-            printf("%i ", *nid);
-        }
-        printf("\n");
+        parse_face(line, &faces[i]);
     }
+    // debug: print them
+    // print_faces(faces, nf);
+
+    // close infile
+    fclose(infile);
+    free(line);
+
+    // calculate areas
+    double a = 0.0;
+    for (int i = 0; i < nf; i++)
+    {
+        a += face_area(&faces[i], vertices);
+    }
+    printf("area: %f\n", a);
 
     // free memory
+    free(vertices);
     for (int i = 0; i < nf; i++)
     {
         free(faces[i].vertices);
     }
-    
-    // close file
-    fclose(infile);
 
-    free(line);
-    free(vertices);
     return 0;
 }
 
 
-// compute area of a triagle in 3d space
+// return face area
+// 0,1,2 + 0,2,3 + 0,3,4 + 0,n-2,n-1
+// n vertices; n-2 calculations
+
+// FIXME: das ist doch Mist ?! mit pointern rumgurken?!
+double face_area(face *f, point points[])
+{
+    // it's a triangle
+    double area = 0.0;
+    size_t offi = sizeof(int);  
+    size_t offp = sizeof(point);
+    if (f->nv == 3)
+    {
+        // pointer to p0
+        int nid0 = *f->vertices;
+        int nid1 = *(f->vertices + offi);
+        int nid2 = *(f->vertices + 2*offi);
+
+        double da = triangle_area(points[nid0], points[nid1], points[nid2]);
+        if (da != 0.0)
+        {
+            printf("%f\n", da);
+        }
+        
+        area += da;
+    }
+    return area;
+}
+
+
+// compute area of a triangle in 3d space
+// TODO: reference
 double triangle_area(point v0, point v1, point v2)
 {
     double tz = (v1.x * v0.y) - (v0.x * v1.y) 
-             + (v2.x * v1.y) - (v1.x * v2.y)
-             + (v0.x * v2.y) - (v2.x * v0.y);
+              + (v2.x * v1.y) - (v1.x * v2.y)
+              + (v0.x * v2.y) - (v2.x * v0.y);
     double ty = (v1.x * v0.z) - (v0.x * v1.z) 
-             + (v2.x * v1.z) - (v1.x * v2.z)
-             + (v0.x * v2.z) - (v2.x * v0.z);
+              + (v2.x * v1.z) - (v1.x * v2.z)
+              + (v0.x * v2.z) - (v2.x * v0.z);
     double tx = (v1.y * v0.z) - (v0.y * v1.z) 
-             + (v2.y * v1.z) - (v1.y * v2.z)
-             + (v0.y * v2.z) - (v2.y * v0.z);
+              + (v2.y * v1.z) - (v1.y * v2.z)
+              + (v0.y * v2.z) - (v2.y * v0.z);
     return 0.5 * sqrt(tx*tx + ty*ty + tz*tz);
 }
 
@@ -181,6 +187,7 @@ void parse_coords(char *line, point *p)
     p->y = atof(strtok(NULL, delim)); 
     p->z = atof(strtok(NULL, delim)); 
 }
+
 
 // parse the vertices into an array? 
 void parse_face(char *line, face *f)
@@ -213,4 +220,28 @@ void parse_face(char *line, face *f)
 }
 
 
+// print vertex coordinates
+void print_coords(point *coords, int n)
+{
+    for (int i = 0; i < n; i++)
+    {
+        point *p = &coords[i];
+        printf("%f %f %f\n", p->x, p->y, p->z);   
+    }
+}
 
+// print node indices for faces
+void print_faces(face *faces, int nf)
+{
+    for (int i = 0; i < nf; i++)
+    {
+        face *f = &faces[i];
+        printf("%i (%i): ", i, f->nv);
+        int *nid = f->vertices;
+        for (int j = 0; j < f->nv; j++, nid += sizeof(int))
+        {
+            printf("%i ", *nid);
+        }
+        printf("\n");
+    }
+}
