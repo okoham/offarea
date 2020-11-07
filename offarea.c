@@ -34,13 +34,12 @@ face;
 
 
 // triangle area
-double triangle_area(point v0, point v1, point v2)
+double dummy_triangle_area(point v0, point v1, point v2)
 {
     return 0.1234;
 }
 
 
-/*
 double triangle_area(point v0, point v1, point v2)
 {
     double tz = (v1.x * v0.y) - (v0.x * v1.y) 
@@ -54,7 +53,7 @@ double triangle_area(point v0, point v1, point v2)
              + (v0.y * v2.z) - (v2.y * v0.z);
     return 0.5 * sqrt(tx*tx + ty*ty + tz*tz);
 }
-*/
+
 
 
 void parse_line2_tok(char *line, int *nv, int *nf)
