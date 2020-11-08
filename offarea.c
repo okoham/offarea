@@ -5,13 +5,13 @@
 #include <math.h>
 
 
-typedef struct point
+typedef struct vector
 {
     double x;
     double y;
     double z;
 } 
-point;
+vector;
 
 
 // das geht auch ...
@@ -24,13 +24,16 @@ face;
 
 
 // function declarations
-double face_area(face *f, point points[]);
-double triangle_area(point v0, point v1, point v2);
+double face_area(face *f, vector points[]);
+double triangle_area(vector v0, vector v1, vector v2);
 void parse_line2_tok(char *line, int *nv, int *nf);
-void parse_coords(char *line, point *p);
+void parse_coords(char *line, vector *p);
 void parse_face(char *line, face *f);
-void print_coords(point *coords, int n);
+void print_coords(vector *coords, int n);
 void print_faces(face *faces, int n);
+void cross(vector *a, vector *b, vector *c);
+void sum(vector *a, vector *b, vector *c);
+double norm(vector *a);
 
 
 int main(int argc, char *argv[])
@@ -77,7 +80,7 @@ int main(int argc, char *argv[])
     }
 
     // allocate memory for vertex coordinates
-    point *vertices = calloc(nv, sizeof(point));
+    vector *vertices = calloc(nv, sizeof(vector));
     // read vertices
     for (int i = 0; i < nv; i++)
     {
@@ -124,38 +127,38 @@ int main(int argc, char *argv[])
 // return face area
 // 0,1,2 + 0,2,3 + 0,3,4 + 0,n-2,n-1
 // n vertices; n-2 calculations
-
 // compute area of a polygonal face
-double face_area(face *f, point points[])
+double face_area(face *f, vector points[])
 {
     double area = 0.0;
     size_t offi = sizeof(int);  
+    double da; 
     
     int nid0 = *f->vertices;
     for (int i = 0; i < f->nv - 2; i++)
     {
         int nid1 = *(f->vertices + (i + 1)*offi);
         int nid2 = *(f->vertices + (i + 2)*offi);
-        area += triangle_area(points[nid0], points[nid1], points[nid2]);
+        da = triangle_area(points[nid0], points[nid1], points[nid2]);
+        printf("%i, %i, %i: %f\n", nid0, nid1, nid2, da);
+        area += da;
     }
     return area;
 }
 
 
+// ref scheider/eberly
 // compute area of a triangle in 3d space
 // TODO: reference
-double triangle_area(point v0, point v1, point v2)
+double triangle_area(vector v0, vector v1, vector v2)
 {
-    double tz = (v1.x * v0.y) - (v0.x * v1.y) 
-              + (v2.x * v1.y) - (v1.x * v2.y)
-              + (v0.x * v2.y) - (v2.x * v0.y);
-    double ty = (v1.x * v0.z) - (v0.x * v1.z) 
-              + (v2.x * v1.z) - (v1.x * v2.z)
-              + (v0.x * v2.z) - (v2.x * v0.z);
-    double tx = (v1.y * v0.z) - (v0.y * v1.z) 
-              + (v2.y * v1.z) - (v1.y * v2.z)
-              + (v0.y * v2.z) - (v2.y * v0.z);
-    return 0.5 * sqrt(tx*tx + ty*ty + tz*tz);
+    vector ab, bc, ca, tmp1, tmp2; 
+    cross(&v0, &v1, &ab);
+    cross(&v1, &v2, &bc);
+    cross(&v2, &v0, &ca);
+    sum(&ab, &bc, &tmp1);
+    sum(&tmp1, &ca, &tmp2);
+    return 0.5 * norm(&tmp2);
 }
 
 
@@ -169,9 +172,8 @@ void parse_line2_tok(char *line, int *nv, int *nf)
 } 
 
 
-
 // get the x, y, z coordinates
-void parse_coords(char *line, point *p)
+void parse_coords(char *line, vector *p)
 {
     // char *token = NULL;
     char *delim = " ";
@@ -213,14 +215,15 @@ void parse_face(char *line, face *f)
 
 
 // print vertex coordinates
-void print_coords(point *coords, int n)
+void print_coords(vector *coords, int n)
 {
     for (int i = 0; i < n; i++)
     {
-        point *p = &coords[i];
+        vector *p = &coords[i];
         printf("%f %f %f\n", p->x, p->y, p->z);   
     }
 }
+
 
 // print node indices for faces
 void print_faces(face *faces, int nf)
@@ -237,3 +240,30 @@ void print_faces(face *faces, int nf)
         printf("\n");
     }
 }
+
+
+// vector product of two 3d vectors
+void cross(vector *a, vector *b, vector *c)
+{
+    c->x = (a->y * b->z) - (b->y * a->z);
+    c->y = (a->z * b->x) - (b->z * a->x);
+    c->z = (a->x * b->y) - (b->x * a->y);
+}
+
+
+// sum of two vectors
+void sum(vector *a, vector *b, vector *c)
+{
+    c->x = a->x + b->x;
+    c->y = a->y + b->y;
+    c->z = a->z + b->z;
+}
+
+
+// 2-norm
+double norm(vector *a)
+{
+    double sum = (a->x * a->x) + (a->y * a->y) + (a->z * a->z);
+    return sqrt(sum);
+}
+
