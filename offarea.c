@@ -5,6 +5,7 @@
 #include <math.h>
 
 #define DEBUG 0
+#define BUFFER_SIZE 1024
 
 // struct for vectors and points
 typedef struct
@@ -27,7 +28,7 @@ face;
 
 
 // function declarations
-void parse_line2_tok(char *line, int *nv, int *nf);
+void parse_counts(char *line, int *nv, int *nf);
 void parse_coords(char *line, vector *p);
 void parse_face(char *line, face *f);
 void print_coords(vector *coords, int n);
@@ -38,12 +39,9 @@ void cross(vector *a, vector *b, vector *c);
 void sum(vector *a, vector *b, vector *c);
 double norm(vector *a);
 
-
+// the main program
 int main(int argc, char *argv[])
 {
-
-    // TODO: --help
-
     // check number of arguments == 1
     if (argc != 2)
     {
@@ -56,36 +54,46 @@ int main(int argc, char *argv[])
     if (infile == NULL)
     {
         printf("File %s not found, exiting.\n", argv[1]);
-        exit(EXIT_FAILURE);
+        return 1;
     }
 
-    // allocate memory for word
-    char *line = NULL;
-    unsigned long len = 0;
-    long nread;
+    // allocate memory for reading file. 1024 character should be enough.
+    unsigned long len = BUFFER_SIZE; 
+    char *line = malloc(len*sizeof(char));
+    if (line == NULL)
+    {
+        printf("Error: could not allocate memory.\n");
+        exit(1);
+    }
 
-    // first line: should be OFF
-    nread = getline(&line, &len, infile);
+    // first line: should be "OFF"
+    long nread = getline(&line, &len, infile);
     if (strcasecmp(line, "OFF\n") != 0)
     {
-        printf("Not an OFF file.\n");
-        exit(EXIT_FAILURE);     
+        printf("Error: Not an OFF file.\n");
+        exit(1);     
     }
 
+    // read number of vertices and faces. Third attribute (num edges) ignored.
     int nv = 0;
     int nf = 0;
-
-    // nv, nf, ne
-    if ((nread = getline(&line, &len, infile)) != -1)
+    nread = getline(&line, &len, infile);
+    if (nread == -1)
     {
-        parse_line2_tok(line, &nv, &nf);
-        if (DEBUG)
-            printf("%i, %i\n", nv, nf);
+        printf("Error: Improper format (expected num vertices/faces).\n");
+        exit(1);    
     }
+    parse_counts(line, &nv, &nf);
+    if (DEBUG)
+        printf("#vertices: %i\n#faces: %i\n", nv, nf);    
 
-    // allocate memory for vertex coordinates
-    vector *coords = calloc(nv, sizeof(vector));
     // read vertex coordinates
+    vector *coords = calloc(nv, sizeof(vector));
+    if (coords == NULL)
+    {
+        printf("Error: could not allocate memory.\n");
+        exit(1);
+    }
     for (int i = 0; i < nv; i++)
     {
         nread = getline(&line, &len, infile);
@@ -95,30 +103,36 @@ int main(int argc, char *argv[])
     if (DEBUG)
         print_coords(coords, nv);
     
-    // faces, other way
-    // TODO: assert that index is always < nv
+    // read faces
+    // FIXME: assert that index is always < nv
     face *faces = calloc(nf, sizeof(face));
+    if (faces == NULL)
+    {
+        printf("Error: could not allocate memory.\n");
+        exit(1);
+    }    
+
     for (int i = 0; i < nf; i++)
     {
         nread = getline(&line, &len, infile);
-        // printf("%s", line);
         parse_face(line, &faces[i]);
     }
+
     if (DEBUG)
         print_faces(faces, nf);
 
-    // close infile
+    // close infile and free memory for line buffer
     fclose(infile);
     free(line);
 
     // calculate area
-    double a = 0.0;
+    double area = 0.0;
     face *f = faces;
     for (int i = 0; i < nf; i++, f++)
     {
-        a += face_area(f, coords);
+        area += face_area(f, coords);
     }
-    printf("area: %f\n", a);
+    printf("\narea: %f\n", area);
 
     // free memory
     free(coords);
@@ -177,7 +191,7 @@ double triangle_area(vector v0, vector v1, vector v2)
 
 // parse line containing number of vertices, faces, edges.
 // number of edges is ignored
-void parse_line2_tok(char *line, int *nv, int *nf)
+void parse_counts(char *line, int *nv, int *nf)
 {
     char *delim = " ";
     *nv = atoi(strtok(line, delim));
@@ -209,6 +223,7 @@ void parse_face(char *line, face *f)
     int *vertex_indices = calloc(nvf, sizeof(int));
     if (vertex_indices == NULL)
     {
+        printf("Error: could not allocate memory.\n");
         exit(1);
     }
 
@@ -229,10 +244,11 @@ void parse_face(char *line, face *f)
 // print vertex coordinates
 void print_coords(vector *coords, int n)
 {
+    printf("\nCoordinates\n");
     for (int i = 0; i < n; i++)
     {
         vector *p = &coords[i];
-        printf("%f %f %f\n", p->x, p->y, p->z);   
+        printf("%i: %f %f %f\n", i, p->x, p->y, p->z);   
     }
 }
 
@@ -240,6 +256,7 @@ void print_coords(vector *coords, int n)
 // print node indices for faces
 void print_faces(face *faces, int nf)
 {
+    printf("\nFaces\n");
     face *f = faces;
     for (int i = 0; i < nf; i++, f++)
     {
@@ -278,4 +295,3 @@ double norm(vector *a)
     double sum = (a->x * a->x) + (a->y * a->y) + (a->z * a->z);
     return sqrt(sum);
 }
-
