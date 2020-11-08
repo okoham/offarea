@@ -4,7 +4,9 @@
 #include <strings.h>
 #include <math.h>
 
+#define DEBUG 0
 
+// struct for vectors and points
 typedef struct
 {
     double x;
@@ -14,27 +16,24 @@ typedef struct
 vector;
 
 
-// das geht auch ...
+// struct for faces, consisting of the number of indices and a
+// pointer to the array of indices
 typedef struct
 {
     int nv;
-    int *vertices;
+    int *indices;
 } 
 face;
 
 
-size_t INT_SIZE = sizeof(int);
-
 // function declarations
-double face_area(face *f, vector points[]);
-double triangle_area(vector v0, vector v1, vector v2);
 void parse_line2_tok(char *line, int *nv, int *nf);
 void parse_coords(char *line, vector *p);
 void parse_face(char *line, face *f);
-// double face_area_2(int indices[], int nv, vector points[]);
-double face_area_2(face *f, vector points[]);
 void print_coords(vector *coords, int n);
 void print_faces(face *faces, int n);
+double triangle_area(vector v0, vector v1, vector v2);
+double face_area(face *f, vector points[]);
 void cross(vector *a, vector *b, vector *c);
 void sum(vector *a, vector *b, vector *c);
 double norm(vector *a);
@@ -80,19 +79,21 @@ int main(int argc, char *argv[])
     if ((nread = getline(&line, &len, infile)) != -1)
     {
         parse_line2_tok(line, &nv, &nf);
-        printf("%i, %i\n", nv, nf);
+        if (DEBUG)
+            printf("%i, %i\n", nv, nf);
     }
 
     // allocate memory for vertex coordinates
-    vector *vertices = calloc(nv, sizeof(vector));
-    // read vertices
+    vector *coords = calloc(nv, sizeof(vector));
+    // read vertex coordinates
     for (int i = 0; i < nv; i++)
     {
         nread = getline(&line, &len, infile);
-        parse_coords(line, &vertices[i]);     
+        parse_coords(line, &coords[i]);     
     }
-    // debug: print them
-    // print_coords(vertices, nv);
+    
+    if (DEBUG)
+        print_coords(coords, nv);
     
     // faces, other way
     // TODO: assert that index is always < nv
@@ -100,134 +101,67 @@ int main(int argc, char *argv[])
     for (int i = 0; i < nf; i++)
     {
         nread = getline(&line, &len, infile);
-        printf("%s", line);
+        // printf("%s", line);
         parse_face(line, &faces[i]);
     }
-    // debug: print them
-    print_faces(faces, nf);
+    if (DEBUG)
+        print_faces(faces, nf);
 
     // close infile
     fclose(infile);
     free(line);
 
-    // calculate areas
+    // calculate area
     double a = 0.0;
-    for (int i = 0; i < nf; i++)
+    face *f = faces;
+    for (int i = 0; i < nf; i++, f++)
     {
-        // a += face_area(&faces[i], vertices);
-        a += face_area_2(&faces[i], vertices);
+        a += face_area(f, coords);
     }
     printf("area: %f\n", a);
 
-    // DADDEL
-    printf("sizeof(int): %i\n", (int) sizeof(int));
-    printf("sizeof(int*): %i\n", (int) sizeof(int*));    
-    printf("sizeof(vector): %i\n", (int) sizeof(vector));
-    printf("sizeof(face): %i\n", (int) sizeof(face));
-
-
-    face *f1 = &faces[0];
-    for (int i = 0; i < 3; i++)
-    {
-        printf("faces[0]: %p\n", f1);
-        f1++;
-    }
-
-    vector *p1 = vertices;
-    for (int i = 0; i < 3; i++)
-    {
-        printf("vertices[0]: %p\n", p1);
-        p1++;
-    }    
-
-    double *v1 = &vertices[0].x;
-    for (int i = 0; i < 3; i++)
-    {
-        printf("v.x: %p\n", v1);
-        v1++;
-    }       
-
-    int *i1 = faces[3].vertices;
-    for (int i = 0; i < 3; i++)
-    {
-        int idx = *i1;
-        printf("idx: %p, %i\n", i1, idx);
-        i1++;
-    }       
-    
-
-
     // free memory
-    free(vertices);
+    free(coords);
     for (int i = 0; i < nf; i++)
     {
-        free(faces[i].vertices);
+        free(faces[i].indices);
     }
     free(faces);
-    return 0;
-    
+
+    // done
+    return 0;    
 }
 
 
-
-// return face area
-// 0,1,2 + 0,2,3 + 0,3,4 + 0,n-2,n-1
-// n vertices; n-2 calculations
-// compute area of a polygonal face
+// Calculate unsigned area of a convex (!!!) polygonal face.
+// this decomposes the polygon into a triangle fan, which
+// is valid for convex polygons only.
 double face_area(face *f, vector points[])
 {
-    double area = 0.0;
-    double da; 
-    
-    int nid0 = f->vertices[0];
-    for (int i = 0; i < f->nv - 2; i++)
-    {
-        // int nid1 = *(f->vertices + (i + 1)*INT_SIZE);
-        // int nid2 = *(f->vertices + (i + 2)*INT_SIZE);
-        // note: THIS DOES NOT WORK!
-        int nid1 = f->vertices[i + 1];
-        int nid2 = f->vertices[i + 2];
-        da = triangle_area(points[nid0], points[nid1], points[nid2]);
-        printf("%i, %i, %i: %f\n", nid0, nid1, nid2, da);
-        area += da;
-    }
-    return area;
-}
-
-
-double face_area_2(face *f, vector points[])
-{
-    double area = 0.0;
-    double da; 
-
-    // size_t size = sizeof(int);
-    // long size = sizeof(int);
+    // get number of indices
     int nv = f->nv;
-    int *indices = f->vertices;
+    // pointers to first three node ids
+    int *indices = f->indices;
     int *nid0 = indices;
     int *nid1 = &indices[1]; 
     int *nid2 = &indices[2];
 
-    for (int i = 0; i < nv - 2; i++)
-    {
+    // initialise area
+    double area = 0.0;
 
-        // int *nid1 = indices + (i + 1);
-        // int *nid2 = indices + (i + 2); //*(indices + (i + 2));
-        // printf("%i: %f, %f, %f\n", nid1, points[nid1].x, points[nid1].y, points[nid1].z);
-        da = triangle_area(points[*nid0], points[*nid1], points[*nid2]);
-        printf("%i, %i, %i: %f  ", *nid0, *nid1, *nid2, da);
-        printf("(%p, %p, %p)\n", nid0, nid1, nid2);
-        area += da;
-        nid1++;
-        nid2++;
+    for (int i = 0; i < nv - 2; i++, nid1++, nid2++)
+    {
+        area += triangle_area(points[*nid0], points[*nid1], points[*nid2]);
+        // DEBUG
+        // printf("%i, %i, %i: %f  \n", *nid0, *nid1, *nid2, area);
     }
     return area;
 }
 
 
-// ref scheider/eberly
-// compute area of a triangle in 3d space
-// TODO: reference
+// Compute area of a triangle in 3D space.
+// Ref. Schneider, Eberly: Geometric Tools for Computer Graphics, 
+// Morgan Kaufman 2003
 double triangle_area(vector v0, vector v1, vector v2)
 {
     vector ab, bc, ca, tmp1, tmp2; 
@@ -267,13 +201,12 @@ void parse_face(char *line, face *f)
 {
     char *delim = "\n ";
 
-    // number of vertices
+    // number of vertices for this polygon
     char *token = strtok(line, delim);
     int nvf = atoi(token);
-    // printf("nvf = %i\n", nvf);
 
     // allocate memory
-    int *vertex_indices = calloc(nvf, INT_SIZE);
+    int *vertex_indices = calloc(nvf, sizeof(int));
     if (vertex_indices == NULL)
     {
         exit(1);
@@ -284,23 +217,12 @@ void parse_face(char *line, face *f)
     for (int i = 0; i < nvf; i++, p++)
     {
         token = strtok(NULL, delim);
-        printf("--> %i ", atoi(token));
-        // *(vertex_indices + i*INT_SIZE) = atoi(token);
         *p = atoi(token);
     }
-    printf("\n");
-    p = vertex_indices;
-    for (int i = 0; i < nvf; i++, p++)
-    {
-        int *addr = vertex_indices + i; //*INT_SIZE;
-        // printf(" %i", *(vertex_indices + i*INT_SIZE));
-        printf("  %i (%p, %p)", *p, p, addr);
-    }
-    printf("\n");
 
     // build struct
     f->nv = nvf;
-    f->vertices = vertex_indices;
+    f->indices = vertex_indices;
 }
 
 
@@ -321,13 +243,11 @@ void print_faces(face *faces, int nf)
     face *f = faces;
     for (int i = 0; i < nf; i++, f++)
     {
-        // size_t size = sizeof(int);
-        // face *f = &(faces[i]);
         printf("%i (%i): ", i, f->nv);
-        int *nid = f->vertices;
+        int *nid = f->indices;
         for (int j = 0; j < f->nv; j++, nid++)
         {
-            printf("%p ", nid);
+            printf("%i ", *nid);
         }
         printf("\n");
     }
@@ -352,7 +272,7 @@ void sum(vector *a, vector *b, vector *c)
 }
 
 
-// 2-norm
+// 2-Norm of a vector
 double norm(vector *a)
 {
     double sum = (a->x * a->x) + (a->y * a->y) + (a->z * a->z);
