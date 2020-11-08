@@ -88,6 +88,7 @@ int main(int argc, char *argv[])
     // print_coords(vertices, nv);
     
     // faces, other way
+    // TODO: assert that index is always < nv
     face faces[nf];
     for (int i = 0; i < nf; i++)
     {
@@ -124,27 +125,18 @@ int main(int argc, char *argv[])
 // 0,1,2 + 0,2,3 + 0,3,4 + 0,n-2,n-1
 // n vertices; n-2 calculations
 
-// FIXME: das ist doch Mist ?! mit pointern rumgurken?!
+// compute area of a polygonal face
 double face_area(face *f, point points[])
 {
-    // it's a triangle
     double area = 0.0;
     size_t offi = sizeof(int);  
-    size_t offp = sizeof(point);
-    if (f->nv == 3)
+    
+    int nid0 = *f->vertices;
+    for (int i = 0; i < f->nv - 2; i++)
     {
-        // pointer to p0
-        int nid0 = *f->vertices;
-        int nid1 = *(f->vertices + offi);
-        int nid2 = *(f->vertices + 2*offi);
-
-        double da = triangle_area(points[nid0], points[nid1], points[nid2]);
-        if (da != 0.0)
-        {
-            printf("%f\n", da);
-        }
-        
-        area += da;
+        int nid1 = *(f->vertices + (i + 1)*offi);
+        int nid2 = *(f->vertices + (i + 2)*offi);
+        area += triangle_area(points[nid0], points[nid1], points[nid2]);
     }
     return area;
 }
